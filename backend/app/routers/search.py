@@ -19,16 +19,19 @@ settings = get_settings()
 async def check_rate_limit(user: Optional[User], db: AsyncSession):
     if user and user.is_premium:
         return
-    user_id = user.id if user else None
+    # Usuários anônimos não têm sessão rastreável — sem rate limit por IP aqui
+    if not user:
+        return
+    # Free autenticados: limite diário
     today_start = datetime.combine(date.today(), datetime.min.time()).replace(tzinfo=timezone.utc)
-    query = select(func.count()).select_from(Search).where(Search.created_at >= today_start)
-    if user_id:
-        query = query.where(Search.user_id == user_id)
-    count = await db.scalar(query)
+    count = await db.scalar(
+        select(func.count()).select_from(Search)
+        .where(Search.user_id == user.id, Search.created_at >= today_start)
+    )
     if count >= settings.free_searches_per_day:
         raise HTTPException(
             status_code=429,
-            detail=f"Limite de {settings.free_searches_per_day} buscas/dia atingido. Assine o Premium para buscas ilimitadas.",
+            detail=f"Limite de {settings.free_searches_per_day} buscas/dia atingido. Assine o plano Hunter para buscas ilimitadas.",
         )
 
 

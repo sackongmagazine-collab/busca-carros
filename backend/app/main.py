@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from app.database import create_tables
-from app.routers import auth, search, alerts, subscriptions, dealers, admin
+from app.routers import auth, search, alerts, subscriptions, dealers, admin, fipe
 
 
 @asynccontextmanager
@@ -38,7 +38,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-for router in [auth.router, search.router, alerts.router, subscriptions.router, dealers.router, admin.router]:
+for router in [auth.router, search.router, alerts.router, subscriptions.router, dealers.router, admin.router, fipe.router]:
     app.include_router(router, prefix="/api")
 
 

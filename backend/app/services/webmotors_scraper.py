@@ -1,12 +1,11 @@
 import httpx
 import logging
-import json
+import asyncio
 from typing import Optional
 from app.schemas.search import CarListing, SearchRequest
 
 logger = logging.getLogger(__name__)
 
-# Webmotors expõe uma API interna nos seus próprios requests — mais estável que scraping HTML
 WM_API = "https://www.webmotors.com.br/api/search/car"
 
 
@@ -21,26 +20,35 @@ class WebmotorsScraper:
 
     async def search(self, criteria: SearchRequest) -> list[CarListing]:
         listings = []
-        try:
-            params = {
-                "url": self._build_url(criteria),
-                "actualPage": 1,
-                "displayPerPage": 24,
-                "order": 1,  # menor preço
-                "showMenu": False,
-            }
-            resp = await self.client.get(WM_API, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
-            for item in data.get("SearchResults", []):
-                listing = self._parse_item(item, criteria)
-                if listing:
-                    listings.append(listing)
-
-        except Exception as e:
-            logger.warning(f"Webmotors indisponível: {e}")
-
+        for attempt in range(3):
+            try:
+                params = {
+                    "url": self._build_url(criteria),
+                    "actualPage": 1,
+                    "displayPerPage": 24,
+                    "order": 1,
+                    "showMenu": False,
+                }
+                resp = await self.client.get(WM_API, params=params)
+                if resp.status_code in (429, 403):
+                    wait = 2 ** attempt
+                    logger.warning(f"Webmotors bloqueado ({resp.status_code}), aguardando {wait}s")
+                    await asyncio.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                for item in data.get("SearchResults", []):
+                    listing = self._parse_item(item, criteria)
+                    if listing:
+                        listings.append(listing)
+                break
+            except httpx.TimeoutException:
+                logger.warning(f"Webmotors timeout (tentativa {attempt+1})")
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+            except Exception as e:
+                logger.warning(f"Webmotors indisponível: {e}")
+                break
         return listings
 
     def _build_url(self, c: SearchRequest) -> str:
@@ -63,8 +71,6 @@ class WebmotorsScraper:
 
             year = spec.get("YearFabrication")
             km = spec.get("Odometer")
-            transmission = spec.get("Transmission", "")
-            fuel = spec.get("FuelType", "")
 
             if criteria.max_km and km and int(km) > criteria.max_km:
                 return None
@@ -91,8 +97,8 @@ class WebmotorsScraper:
                 year=int(year) if year else None,
                 price=price,
                 km=int(km) if km else None,
-                transmission=transmission,
-                fuel=fuel,
+                transmission=spec.get("Transmission", ""),
+                fuel=spec.get("FuelType", ""),
                 location=f"{city}/{state}".strip("/"),
                 url=url,
                 image_url=item.get("Media", [{}])[0].get("LargeUrl") if item.get("Media") else None,

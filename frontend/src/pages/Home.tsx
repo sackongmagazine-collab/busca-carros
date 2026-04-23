@@ -23,7 +23,12 @@ export default function Home() {
       })
       navigate(`/results/${search_id}`, { state: { results } })
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Erro inesperado. Tente novamente.')
+      const axiosErr = err as { response?: { status?: number; data?: { detail?: string } } }
+      if (axiosErr?.response?.status === 429) {
+        setError(axiosErr.response.data?.detail ?? 'Limite de buscas atingido. Crie uma conta gratuita para continuar.')
+      } else {
+        setError(err instanceof Error ? err.message : 'Erro inesperado. Tente novamente.')
+      }
     } finally {
       setLoading(false)
       setStatusMsg('')

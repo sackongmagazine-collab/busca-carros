@@ -1,6 +1,7 @@
+import React from 'react'
 import { useLocation, useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { ArrowLeft, Star, Tag, ClipboardList } from 'lucide-react'
+import { ArrowLeft, Star, Tag, ClipboardList, SearchX } from 'lucide-react'
 import CarCard from '../components/CarCard'
 import { waitForResults } from '../services/api'
 import type { SearchResponse } from '../types'
@@ -91,7 +92,30 @@ export default function Results() {
         <div className="space-y-4">
           <h2 className="text-xl font-black text-gray-900">Ranking de custo-benefício</h2>
           {results.ranking.length === 0 ? (
-            <p className="text-gray-500 text-center py-12">Nenhum resultado encontrado com os critérios informados. Tente ampliar os filtros.</p>
+            <div className="text-center py-16 space-y-4">
+              <SearchX className="w-14 h-14 text-gray-300 mx-auto" />
+              <p className="text-gray-600 font-semibold text-lg">Nenhum anúncio encontrado</p>
+              <p className="text-gray-400 text-sm max-w-sm mx-auto">
+                Tente ampliar o preço máximo, remover filtros de ano/km ou buscar em outra cidade.
+              </p>
+              <div className="pt-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Modelos populares para tentar</p>
+                <div className="flex flex-wrap justify-center gap-2">
+                  {['Onix', 'HB20', 'Gol', 'Argo', 'Polo', 'Kwid', 'Sandero'].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => navigate('/', { state: { model: m } })}
+                      className="px-3 py-1.5 bg-brand-50 text-brand-700 rounded-full text-sm font-medium hover:bg-brand-100 transition border border-brand-200"
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => navigate('/')} className="mt-4 text-brand-600 underline text-sm">
+                ← Voltar e ajustar filtros
+              </button>
+            </div>
           ) : (
             results.ranking.map((r, i) => (
               <CarCard key={r.listing.url + i} result={r} highlight={i === bestIdx} />

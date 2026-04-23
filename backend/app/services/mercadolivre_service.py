@@ -1,5 +1,6 @@
 import httpx
 import logging
+import asyncio
 from typing import Optional
 from app.schemas.search import CarListing, SearchRequest
 
@@ -9,48 +10,49 @@ ML_API = "https://api.mercadolibre.com"
 
 
 class MercadoLivreService:
-    """
-    Usa a API oficial do MercadoLivre para buscar veículos.
-    Docs: https://developers.mercadolivre.com.br/pt_br/veiculos
-    """
-
     def __init__(self):
         self.client = httpx.AsyncClient(timeout=20.0, headers={"User-Agent": "BuscaCarros/1.0"})
 
     async def search(self, criteria: SearchRequest) -> list[CarListing]:
         listings = []
-        try:
-            # Monta query de busca
-            query = criteria.model
-            if criteria.year_min:
-                query += f" {criteria.year_min}"
+        for attempt in range(3):
+            try:
+                query = criteria.model
+                if criteria.year_min:
+                    query += f" {criteria.year_min}"
 
-            # Busca na categoria de carros (MLB1744)
-            params = {
-                "q": query,
-                "category": "MLB1744",  # Carros e Camionetas
-                "price": f"*-{int(criteria.max_price)}",
-                "sort": "price_asc",
-                "limit": 50,
-            }
+                params = {
+                    "q": query,
+                    "category": "MLB1744",
+                    "price": f"*-{int(criteria.max_price)}",
+                    "sort": "price_asc",
+                    "limit": 50,
+                }
+                if criteria.location:
+                    state_map = self._resolve_state(criteria.location)
+                    if state_map:
+                        params["state"] = state_map
 
-            if criteria.location:
-                state_map = self._resolve_state(criteria.location)
-                if state_map:
-                    params["state"] = state_map
-
-            resp = await self.client.get(f"{ML_API}/sites/MLB/search", params=params)
-            resp.raise_for_status()
-            data = resp.json()
-
-            for item in data.get("results", []):
-                listing = self._parse_item(item, criteria)
-                if listing:
-                    listings.append(listing)
-
-        except Exception as e:
-            logger.error(f"Erro MercadoLivre: {e}")
-
+                resp = await self.client.get(f"{ML_API}/sites/MLB/search", params=params)
+                if resp.status_code == 429:
+                    wait = 2 ** attempt
+                    logger.warning(f"ML rate limited, aguardando {wait}s")
+                    await asyncio.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                for item in data.get("results", []):
+                    listing = self._parse_item(item, criteria)
+                    if listing:
+                        listings.append(listing)
+                break
+            except httpx.TimeoutException:
+                logger.warning(f"ML timeout (tentativa {attempt+1})")
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+            except Exception as e:
+                logger.error(f"Erro MercadoLivre: {e}")
+                break
         return listings
 
     def _parse_item(self, item: dict, criteria: SearchRequest) -> Optional[CarListing]:
@@ -68,11 +70,6 @@ class MercadoLivreService:
                 return None
             if criteria.year_max and year and year > criteria.year_max:
                 return None
-
-            transmission = attrs.get("VEHICLE_TRANSMISSION", "").lower()
-            if criteria.transmission != "indiferente" and transmission:
-                if criteria.transmission not in transmission:
-                    return None
 
             return CarListing(
                 source="MercadoLivre",
