@@ -1,3 +1,4 @@
+import React from 'react'
 import { TrendingUp, Package, DollarSign, Clock } from 'lucide-react'
 import clsx from 'clsx'
 

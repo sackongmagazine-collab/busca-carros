@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { Search, MapPin, DollarSign, Car } from 'lucide-react'
 import type { SearchCriteria } from '../types'
 
