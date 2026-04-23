@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Shield, Zap, BarChart3 } from 'lucide-react'
 import SearchForm from '../components/SearchForm'
 import { startSearch, waitForResults } from '../services/api'
@@ -7,6 +7,8 @@ import type { SearchCriteria } from '../types'
 
 export default function Home() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const initialModel: string | undefined = (location.state as { model?: string } | null)?.model
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [statusMsg, setStatusMsg] = useState('')
@@ -59,7 +61,7 @@ export default function Home() {
         {error && (
           <div className="mb-4 bg-red-100 border border-red-300 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
         )}
-        <SearchForm onSubmit={handleSearch} loading={loading} />
+        <SearchForm onSubmit={handleSearch} loading={loading} initialModel={initialModel} />
       </div>
 
       {/* Features */}
